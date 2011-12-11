@@ -1,6 +1,8 @@
 <?php
 
-/** unnamed.php -- by Dario Berzano <dario.berzano@cern.ch>
+/** index.php -- by Dario Berzano <dario.berzano@cern.ch>
+ *
+ *  Part of sshcertauth.
  *
  *  From an input certificate, passed to this script by means of environment
  *  variables set by the web server, it extracts the public key and converts it
@@ -30,27 +32,26 @@
 /** Includes, definitions, global variables...
  */
 
-// Include phpseclib
+// Include phpseclib and configuration
 set_include_path( get_include_path() . PATH_SEPARATOR . 
   dirname($_SERVER['SCRIPT_FILENAME']) . '/phpseclib0.2.2' );
 require_once 'Crypt/RSA.php';
+require_once 'conf.php';
 
 // When exporting to SSH key, do not append any text comment at the end
 define('CRYPT_RSA_COMMENT', '');
 
 // Defines for output types
-define('AUTH_OUT_XML', 0);
+define('AUTH_OUT_XML',  0);
 define('AUTH_OUT_HTML', 1);
-define('AUTH_OUT_TXT', 2);
+define('AUTH_OUT_TXT',  2);
 
-// Date and time default format: e.g., 'Dec 11 2011 15:27:35 +0000'
+// Date and time default format: e.g., 'Dec 11 2011 15:27:35 +0000' -- note that
+// timezone is extremely important!
 define('AUTH_DATETIME_FORMAT', 'M d Y H:i:s O');
 
 // Temporarily set server name
 $serverFqdn = $_SERVER['SERVER_NAME'];
-
-// SSH port (TODO: move in config)
-$sshPort = 22;
 
 // When auth succeeds, $authValid becomes true
 $authValid = false;
@@ -58,14 +59,8 @@ $authValid = false;
 // Version
 $authVer = '0.2';
 
-// Authorized keys directory
-$sshKeyDir = '/tmp/authorized_keys_test';
-
 // Error messages are an array, empty at start
 $errMsg = array();
-
-// Maximum token validity, in seconds
-$maxValiditySecs = 3600;
 
 /** Checks for required components, for now: OpenSSL in PHP >= 5.2 and LDAP.
  *  Returns true on success, false on failure. The only argument is an array of
@@ -186,7 +181,7 @@ function authSetPubKey(&$pemCert, $userName, $tokenValiditySecs, $sshKeyDir,
  */
 function authGetUser(&$userName, &$maxValiditySecs) {
 
-  $userName = 'caccamerda';
+  $userName = 'dummy';
   $maxValiditySecs = 3600;
   return true;
 
@@ -277,6 +272,7 @@ echo $outXml->asXML();
 <? elseif ($outputType == AUTH_OUT_TXT) : ?>
 <?php
 
+// Text-only output is very minimal
 header('Content-type: text/plain');
 echo "$userName@$serverFqdn:$sshPort"
 
@@ -353,8 +349,8 @@ foreach ($errMsg as $e) echo "<li>$e</li>\n"; ?></ul></div>
     <span class="imp"><?= $validUntilStr ?></span></li>
 </ul>
 
-<p>You can now login to <?= $serverFqdn ?> with the Globus private key with
-the following command:</p>
+<p>You can now login to <?= $serverFqdn ?> with your private key with the
+following command:</p>
 
 <p><span class="cod">ssh -i ~/.globus/userkey.pem
   <?= $userName ?>@<?= $serverFqdn ?></span></p>
