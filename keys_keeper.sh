@@ -5,7 +5,22 @@
 #
 # Part of sshcertauth.
 #
-# Some description is still pending.
+# The keys keeper is the only part of sshcertauth meant to be run as root. It
+# implements two working modes:
+#
+# keys_keeper.sh [addkey|expiry] --keydir <dir> [--user <user>]
+#
+#  - addkey : Adds the given key (on stdin) to the current user's authorized
+#             keys. User is passed with the --user argument. If the current key
+#             is already present, the expiration date is updated. If not, the
+#             key is appended.
+#
+#  - expiry : Scans the keys directory in order to remove expired keys. Those
+#             keys are removed from the files, and if a file has no more keys
+#             inside, it is removed.
+#
+# It is worth noting that this script supports multiple keys per file. If it is
+# not run as root, it auto-invokes sudo on itself.
 #
 
 #
