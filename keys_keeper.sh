@@ -49,7 +49,8 @@ function AddKey() {
   local PubKeyCore=`echo "$PubKey" | awk '{ print $2 }'`
 
   # Lock
-  if ! LockWait $UserName; then
+  LockWait $UserName
+  if [ $? != 0 ] ; then
     echo "Cannot obtain mutex on authorized keys file" >&2
     exit 1
   fi
@@ -98,7 +99,7 @@ function LockWait() {
   [ $LockSuccess == 0 ] && return 1
 
   # Remove lock in case of exit/abort/etc. (only sigkill is uninterruptible)
-  trap "Unlock $LockDir" 0
+  trap "Unlock $1" 0
 
   return 0
 }
@@ -131,10 +132,11 @@ function Expiry() {
 
 }
 
-# Removes the lockdir and unsets EXIT traps
+# Removes the lockdir and unsets EXIT traps. It takes the username as only
+# argument
 function Unlock() {
-  rmdir "$1".lock 2> /dev/null
-  trap '' 0 # unset traps
+  rmdir "$SshKeyDir/$1".lock 2> /dev/null
+  trap '' 0  # unset EXIT traps
 }
 
 # The main function
@@ -145,11 +147,15 @@ function Main() {
   local UserName
 
   ProgName=`basename "$0"`
-  Args=$(getopt -ok:u: --long keydir:,user -n"$ProgName" -- "$@") || exit 1
+  Args=$(getopt -ok:u: --long keydir:,user: -n"$ProgName" -- "$@") || exit 1
 
   eval set -- "$Args"
 
+  Count=0
+
   while [ "$1" != '--' ]; do
+  
+    #echo "Parsing arg: $1" >&2
     case "$1" in
 
       -u|--user)
@@ -168,6 +174,9 @@ function Main() {
       ;;
 
     esac
+
+    let Count++
+    [ $Count == 10 ] && break
 
   done
 
@@ -203,3 +212,6 @@ function Main() {
 #
 
 Main "$@"
+echo 'list of traps:' >&2
+trap -p >&2
+
