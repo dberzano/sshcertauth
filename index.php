@@ -148,7 +148,7 @@ function authSetPubKey(&$pemCert, $userName, $tokenValiditySecs, $sshKeyDir,
   // Key is sent 
   $ph = @proc_open(
     dirname($_SERVER['SCRIPT_FILENAME']) .
-      "/stage_key.sh '$userName' '$sshKeyDir'",
+      "/keys_keeper.sh addkey --user '$userName' --keydir '$sshKeyDir'",
     array(
       0 => array('pipe', 'r'),
       1 => array('pipe', 'w'),
@@ -181,7 +181,7 @@ function authSetPubKey(&$pemCert, $userName, $tokenValiditySecs, $sshKeyDir,
  */
 function authGetUser(&$userName, &$maxValiditySecs) {
 
-  $userName = 'dummy';
+  $userName = 'testuser';
   $maxValiditySecs = 3600;
   return true;
 
@@ -352,7 +352,7 @@ foreach ($errMsg as $e) echo "<li>$e</li>\n"; ?></ul></div>
 <p>You can now login to <?= $serverFqdn ?> with your private key with the
 following command:</p>
 
-<p><span class="cod">ssh -i ~/.globus/userkey.pem
+<p><span class="cod">ssh -p <?= $sshPort ?> -i ~/.globus/userkey.pem
   <?= $userName ?>@<?= $serverFqdn ?></span></p>
 
 <p>No password will be asked.</p>
