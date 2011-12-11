@@ -49,8 +49,7 @@ function AddKey() {
   local PubKeyCore=`echo "$PubKey" | awk '{ print $2 }'`
 
   # Lock
-  LockWait $UserName
-  if [ $? != 0 ] ; then
+  if ! LockWait $UserName; then
     echo "Cannot obtain mutex on authorized keys file" >&2
     exit 1
   fi
@@ -109,6 +108,13 @@ function LockWait() {
 # considered. When key files are empty, they are completely removed.
 function Expiry() {
 
+  local ExpDateIdx
+  local ExpDateStr
+  local ExpDateTs
+  local Now=`date +%s`
+  local ExpDateInvalid
+  local CountKeys
+
   # Change wd
   cd "$SshKeyDir"
 
@@ -117,18 +123,50 @@ function Expiry() {
 
     [ ! -f $KeyFile ] && continue
 
-    if LockWait $KeyFile ; then
-      echo lock is successful
+    if ! LockWait $KeyFile; then
+      echo "Can't obtain mutex for $KeyFile, skipping!"
+      continue
     fi
 
-    echo '-->' $KeyFile
+    local TmpKeyFile="$KeyFile".0
+    echo -n '' > $TmpKeyFile
+
+    CountKeys=0  # valid keys
+
+    while read Key; do
+
+      ExpDateIdx=`awk "BEGIN { print index(\"$Key\", \"Valid until:\") }"`
+      if [ "$ExpDateIdx" -gt 0 ]; then
+
+        let ExpDateIdx+=11
+        ExpDateStr="${Key:$ExpDateIdx}"
+        ExpTs=`date -d "$ExpDateStr" +%s 2> /dev/null`
+        [ $? == 0 ] && ExpDateInvalid=0 || ExpDateInvalid=1
+
+        if [ $ExpDateInvalid == 0 ] && [ $ExpTs -gt $Now ]; then
+          # Key is still valid, keep it
+          let CountKeys++
+          echo "$Key" >> $TmpKeyFile
+        fi
+
+      fi
+
+    done < $KeyFile
+
+    if [ $CountKeys == 0 ]; then
+      # No more valid keys: remove file
+      rm -f $KeyFile $TmpKeyFile
+    else
+      # Substitute file with temporary file containing only valid keys
+      rm -f $KeyFile && mv $TmpKeyFile $KeyFile
+    fi
 
     Unlock $KeyFile
 
   done
 
   # Revert to old wd
-  cd -
+  cd - > /dev/null
 
 }
 
@@ -212,6 +250,3 @@ function Main() {
 #
 
 Main "$@"
-echo 'list of traps:' >&2
-trap -p >&2
-
