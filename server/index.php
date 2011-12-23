@@ -2,7 +2,7 @@
 
 /** index.php -- by Dario Berzano <dario.berzano@cern.ch>
  *
- *  Part of sshcertauth.
+ *  Part of sshcertauth -- https://github.com/dberzano/sshcertauth
  *
  *  From an input certificate, passed to this script by means of environment
  *  variables set by the web server, it extracts the public key and converts it
@@ -37,6 +37,9 @@ set_include_path( get_include_path() . PATH_SEPARATOR .
   dirname($_SERVER['SCRIPT_FILENAME']) . '/phpseclib0.2.2' );
 require_once 'Crypt/RSA.php';
 require_once 'conf.php';
+
+// Include module to retrieve user from client certificate's subject
+require_once 'plugins/user/' . $pluginUser . '.php';
 
 // When exporting to SSH key, do not append any text comment at the end
 define('CRYPT_RSA_COMMENT', '');
@@ -179,13 +182,11 @@ function authSetPubKey(&$pemCert, $userName, $tokenValiditySecs, $sshKeyDir,
  *
  *  [1] http://php.net/manual/en/function.ldap-search.php
  */
-function authGetUser(&$userName, &$maxValiditySecs) {
+/*function authGetUser(&$userName, &$maxValiditySecs) {
 
   $userName = 'testuser';
   $maxValiditySecs = 3600;
   return true;
-
-  /*
 
   $lh = ldap_connect("aliendb06a.cern.ch", 8389);
   if (!$lh) return null;
@@ -202,8 +203,8 @@ function authGetUser(&$userName, &$maxValiditySecs) {
     return $user;
   }
 
-  return null;*/
-}
+  return null;
+}*/
 
 /** Entry point.
  */
@@ -224,13 +225,13 @@ if (authCheckReqs($errMsg) === true) {
   $serverFqdn = $_SERVER['SSL_SERVER_S_DN_CN'];
   $clientSubject = $_SERVER['SSL_CLIENT_S_DN'];
 
-  if (!authGetUser($userName, $maxValidity)) {
-    $errMsg = "Can't get user from AliEn LDAP.";
+  if (!authGetUser($clientSubject, $userName, $validitySecs, $errMsg)) {
+    $errMsg[] = "Can't get user from $pluginUser plugin";
   }
   else {
 
     // Argument is the PEM certificate (containing a RSA pubkey)
-    if (authSetPubKey($_SERVER['SSL_CLIENT_CERT'], $userName, $maxValiditySecs,
+    if (authSetPubKey($_SERVER['SSL_CLIENT_CERT'], $userName, $validitySecs,
           $sshKeyDir, $validUntilStr, $errMsg)) {
       $authValid = true;
     }
