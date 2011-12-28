@@ -8,19 +8,31 @@
 # The keys keeper is the only part of sshcertauth meant to be run as root. It
 # implements two working modes:
 #
-# keys_keeper.sh [addkey|expiry] --keydir <dir> [--user <user>]
+# keys_keeper.sh [addkey|expiry] [-k|--keydir <dir>] [-u|--user <user>] \
+#   [-v|--verbose]
 #
 #  - addkey : Adds the given key (on stdin) to the current user's authorized
 #             keys. User is passed with the --user argument. If the current key
-#             is already present, the expiration date is updated. If not, the
+#             is already present, its expiration date is updated. If not, the
 #             key is appended.
 #
 #  - expiry : Scans the keys directory in order to remove expired keys. Those
 #             keys are removed from the files, and if a file has no more keys
-#             inside, it is removed.
+#             inside, it is removed. Keys without a valid expiration date are
+#             left intact.
 #
 # It is worth noting that this script supports multiple keys per file. If it is
-# not run as root, it auto-invokes sudo on itself.
+# not run as root, it auto-invokes sudo on itself, so for non-interactive usage
+# /etc/sudoers must be properly configured.
+#
+# The variable --keydir is mandatory, but if not given an autodetect from the
+# PHP configuration file (conf.php in the same folder) is performed. For this
+# to work, the command-line interface (CLI) for PHP must be installed.
+#
+# Everything is logged by the system logger, i.e.: /var/log/messages. If verbose
+# option is enabled, messages are printed on stderr too.
+#
+# An exit state of zero means success; nonzero means some kind of failure.
 #
 
 #
@@ -40,6 +52,11 @@ export SshKeyDir
 
 # Maximum number of seconds to wait for a lock
 export LockLimit=5
+
+# Verbosity on stdout and on /var/log/messages
+export VerboseScreen=0
+export VerboseLogger=1
+export LoggerTag='keys_keeper'
 
 #
 # Functions
@@ -65,11 +82,12 @@ function AddKey() {
 
   # Lock
   if ! LockWait $UserName; then
-    echo "Cannot obtain mutex on authorized keys file" >&2
+    prn "Cannot obtain mutex on authorized keys file, exiting"
     exit 1
   fi
 
   # Is key present?
+  local Renew=0
   grep -c "$PubKeyCore" "$FullKeyFilePath" > /dev/null 2>&1
   if [ $? == 0 ]; then
 
@@ -77,12 +95,22 @@ function AddKey() {
     grep -v "$PubKeyCore" "$FullKeyFilePath" > "$FullKeyFilePath".0
     rm -f "$FullKeyFilePath"
     mv "$FullKeyFilePath".0 "$FullKeyFilePath"
+    Renew=1
 
   fi
 
   # Key is not present: append it (take into account write errors)
   echo "$PubKey" >> "$FullKeyFilePath"
-  [ $? != 0 ] && exit 1
+  if [ $? == 0 ]; then
+    if [ $Renew == 1 ]; then
+      prn "$UserName: this key already exists, renewing it"
+    else
+      prn "$UserName: authorizing new key"
+    fi
+  else
+    prn "$UserName: can't authorize key, write error!"
+    exit 1
+  fi
 
   # No error at this point: we can unlock
   exit 0
@@ -118,6 +146,25 @@ function LockWait() {
   return 0
 }
 
+# Reads a variable from the PHP configuration file of sshcertauth. It requires
+# php-cli to work properly. Variable content is outputted on
+function ConfPhp() {
+  local FullDir=$(dirname $0)
+  php <<EOF
+<?php
+@require '$FullDir/conf.php';
+if (isset(\$$1)) { echo "\$$1\n"; exit(0); }
+exit(1);
+?>
+EOF
+}
+
+# Print function with a custom prefix: it also prints on /var/log/messages
+function prn() {
+  [ $VerboseScreen == 1 ] && echo "$@" >&2
+  [ $VerboseLogger == 1 ] && logger -t "$LoggerTag" "$@"
+}
+
 # Remove expired keys from the SSH authorized keys directory. Multiple keys per
 # file are supported. Only keys with a 'Valid until:' comment field are
 # considered. When key files are empty, they are completely removed.
@@ -127,19 +174,29 @@ function Expiry() {
   local ExpDateStr
   local ExpDateTs
   local Now=`date +%s`
-  local ExpDateInvalid
   local CountKeys
+
+  # Variables used for report
+  local CountScannedKeys=0
+  local CountValidKeys=0
+  local CountSkippedKeys=0
+  local CountScannedFiles=0
+  local CountDeletedFiles=0
 
   # Change wd
   cd "$SshKeyDir"
+
+  # Print starting banner
+  prn "Scan of SSH key directory $SshKeyDir started"
 
   # Loop over all keys (only files)
   for KeyFile in *; do
 
     [ ! -f $KeyFile ] && continue
+    let CountScannedFiles++  # report
 
     if ! LockWait $KeyFile; then
-      echo "Can't obtain mutex for $KeyFile, skipping!"
+      prn "$KeyFile: can't obtain mutex, skipping file!"
       continue
     fi
 
@@ -150,7 +207,19 @@ function Expiry() {
 
     while read Key; do
 
-      ExpDateIdx=`awk "BEGIN { print index(\"$Key\", \"Valid until:\") }"`
+      let CountScannedKeys++  # report
+
+      # Is the "Valid until:" comment present inside the key? ExpDateIdx is set
+      # to 0 if unpresent
+      ExpDateIdx=`echo "$Key" | awk '{ print index($0, "Valid until:") }'`
+      let ExpDateIdx+=0  # convert to an integer (indirect check if is a num)
+
+      # Keep the key or not?
+      local KeepKey=0
+
+      # By default date format is invalid/not present
+      local ExpDateInvalid=1
+
       if [ "$ExpDateIdx" -gt 0 ]; then
 
         let ExpDateIdx+=11
@@ -159,11 +228,25 @@ function Expiry() {
         [ $? == 0 ] && ExpDateInvalid=0 || ExpDateInvalid=1
 
         if [ $ExpDateInvalid == 0 ] && [ $ExpTs -gt $Now ]; then
-          # Key is still valid, keep it
-          let CountKeys++
-          echo "$Key" >> $TmpKeyFile
+          # Date format is valid and key is not expired yet: keep it
+          KeepKey=1
+          let CountValidKeys++
+          prn "$KeyFile: kept a valid key"
         fi
 
+      else
+        # Date format is invalid: keep the key
+        KeepKey=1
+        let CountSkippedKeys++
+        prn "$KeyFile: skipped a key without expiration date"
+      fi
+
+      # Are we keeping the key?
+      if [ $KeepKey == 1 ]; then
+        let CountKeys++
+        echo "$Key" >> $TmpKeyFile
+      else
+        prn "$KeyFile: deleted an expired key"
       fi
 
     done < $KeyFile
@@ -171,6 +254,8 @@ function Expiry() {
     if [ $CountKeys == 0 ]; then
       # No more valid keys: remove file
       rm -f $KeyFile $TmpKeyFile
+      prn "$KeyFile: no valid keys, file removed"
+      let CountDeletedFiles++
     else
       # Substitute file with temporary file containing only valid keys
       rm -f $KeyFile && mv $TmpKeyFile $KeyFile
@@ -183,9 +268,21 @@ function Expiry() {
   # Revert to old wd
   cd - > /dev/null
 
+  # Print report
+  local CountDeletedKeys
+  local CountKeptFiles
+  let CountDeletedKeys=CountScannedKeys-CountValidKeys-CountSkippedKeys
+  let CountKeptFiles=CountScannedFiles-CountDeletedFiles
+
+  prn "Keys scanned: $CountScannedKeys ($CountValidKeys valid +" \
+      "$CountSkippedKeys skipped + $CountDeletedKeys deleted)"
+  prn "Files scanned: $CountScannedFiles ($CountKeptFiles kept +" \
+      "$CountDeletedFiles deleted)"
+  prn 'Scan finished'
+
 }
 
-# Removes the lockdir and unsets EXIT traps. It takes the username as only
+# Removes the lockdir and unsets EXIT traps. It takes the username as its only
 # argument
 function Unlock() {
   rmdir "$SshKeyDir/$1".lock 2> /dev/null
@@ -200,7 +297,8 @@ function Main() {
   local UserName
 
   ProgName=`basename "$0"`
-  Args=$(getopt -ok:u: --long keydir:,user: -n"$ProgName" -- "$@") || exit 1
+  Args=$(getopt -ok:u:v --long keydir:,user:,verbose -n"$ProgName" -- "$@") \
+    || exit 1
 
   eval set -- "$Args"
 
@@ -208,7 +306,6 @@ function Main() {
 
   while [ "$1" != '--' ]; do
   
-    #echo "Parsing arg: $1" >&2
     case "$1" in
 
       -u|--user)
@@ -221,6 +318,11 @@ function Main() {
         shift 2
       ;;
 
+      -v|--verbose)
+        VerboseScreen=1
+        shift
+      ;;
+
       *)
         echo "Unknown: $1"
         shift
@@ -228,34 +330,39 @@ function Main() {
 
     esac
 
-    let Count++
-    [ $Count == 10 ] && break
-
   done
 
   shift # get rid of '--'
 
+  # If SshKeyDir is not given, read it from the configuration file in PHP
+  [ "$SshKeyDir" == '' ] && SshKeyDir=`ConfPhp 'sshKeyDir'`
+
   # Integrity checks on dir variable
   if [ "${SshKeyDir:0:1}" != '/' ] || [ ${#SshKeyDir} -lt 4 ]; then
-    echo "Invalid SSH keydir variable: $SshKeyDir" >&2
+    prn "Invalid SSH keydir variable: $SshKeyDir, exiting"
     exit 1
   fi
 
   # Does the keys directory exist?
   if [ ! -d "$SshKeyDir" ]; then
-    echo "Can't access key directory: $SshKeyDir" >&2
+    prn "Can't access key directory: $SshKeyDir, exiting"
     exit 1
   fi
 
   # Working mode
   if [ "$1" == 'expiry' ]; then
+    LoggerTag="${LoggerTag}[expiry]"
     Expiry
   elif [ "$1" == 'addkey' ]; then
+    LoggerTag="${LoggerTag}[addkey]"
     if [ "$UserName" == '' ]; then
-      echo "Mandatory username not set" >&2
+      prn "Mandatory username not set, exiting"
       exit 1
     fi
     AddKey "$UserName"
+  else
+    prn "No action given (try \"expiry\" or \"addkey\"), exiting"
+    exit 1
   fi
 
 }
