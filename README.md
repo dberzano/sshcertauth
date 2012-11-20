@@ -3,7 +3,7 @@ sshcertauth
 
 This is sshcertauth, a bunch of PHP and Bash scripts to enable any standard SSH daemon to authenticate users by means of a public key automatically extracted from a certificate via a HTTPS connection.
 
-It is meant to be a lighter alternative [gsissh](http://grid.ncsa.illinois.edu/ssh/), a modified version of both ssh (client) and sshd (server) which directly supports certificate authentication, mostly used for the Grid.
+It is meant to be a lighter alternative to [gsissh](http://grid.ncsa.illinois.edu/ssh/), a modified version of both ssh (client) and sshd (server) which directly supports certificate authentication, mostly used for the Grid.
 
 Unlike gsissh, sshcertauth does not require **anything special** to be installed on the client side. The user must only have **ssh** and a web browser.
 
