@@ -29,6 +29,19 @@
  *  [1] http://phpseclib.sourceforge.net/
  */
 
+/** Redirect every request to this script
+ */
+
+$RedirTo = dirname($_SERVER['SCRIPT_NAME']) . '/';
+if ($_SERVER['QUERY_STRING'] != '') {
+  $RedirTo .= '?' . $_SERVER['QUERY_STRING'];
+}
+
+if ($_SERVER['REQUEST_URI'] != $RedirTo) {
+  header("Location: $RedirTo", True, 302);
+  die();
+}
+
 /** Includes, definitions, global variables...
  */
 
