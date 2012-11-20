@@ -45,14 +45,28 @@ if ($_SERVER['REQUEST_URI'] != $RedirTo) {
 /** Includes, definitions, global variables...
  */
 
+$confOk = False;
+
 // Include phpseclib and configuration
 set_include_path( get_include_path() . PATH_SEPARATOR . 
   dirname($_SERVER['SCRIPT_FILENAME']) . '/phpseclib0.2.2' );
 require_once 'Crypt/RSA.php';
-require_once 'conf.php';
 
-// Include module to retrieve user from client certificate's subject
-require_once 'plugins/user/' . $pluginUser . '.php';
+if (file_exists('conf.php')) {
+  require_once 'conf.php';
+
+  // Include module to retrieve user from client certificate's subject
+  require_once 'plugins/user/' . $pluginUser . '.php';
+
+  $confOk = True;
+}
+else {
+  // Define a dummy function to prevent a fatal error
+  function authGetUser() {}
+  $userName = '';
+  $validitySecs = 0;
+  $pluginUser = '';
+}
 
 // When exporting to SSH key, do not append any text comment at the end
 define('CRYPT_RSA_COMMENT', '');
@@ -70,7 +84,7 @@ define('AUTH_DATETIME_FORMAT', 'M d Y H:i:s O');
 $serverFqdn = $_SERVER['SERVER_NAME'];
 
 // When auth succeeds, $authValid becomes true
-$authValid = false;
+$authValid = False;
 
 // Version
 $authVer = '0.2';
@@ -109,7 +123,7 @@ function authCheckReqs(&$reqErrMsg) {
     $reqErrMsg[] = "SimpleXML for PHP must be enabled\n";
   }
 
-  if (count($reqErrMsg) > $nErrMsg) return false;
+  if (count($reqErrMsg) > $nErrMsg) return False;
   return true;
 }
 
@@ -121,16 +135,16 @@ function authSetPubKey(&$pemCert, $userName, $tokenValiditySecs, $sshKeyDir,
   // Checks if the key is in the correct format (only RSA supported)
   $pubkeyRes = openssl_pkey_get_public($pemCert);
 
-  if ($pubkeyRes === false) {
+  if ($pubkeyRes === False) {
     $extErrMsg[] = 'Can\'t extract pubkey from the certificate';
-    return false;
+    return False;
   }
 
   $pubkeyDetails = openssl_pkey_get_details($pubkeyRes);
 
   if ($pubkeyDetails['type'] != OPENSSL_KEYTYPE_RSA) {
     $extErrMsg[] = 'Public key is not a RSA key';
-    return false;
+    return False;
   }
 
   // The sole public key
@@ -141,9 +155,9 @@ function authSetPubKey(&$pemCert, $userName, $tokenValiditySecs, $sshKeyDir,
   $rsa = new Crypt_RSA();
 
   if ($rsa->loadKey($pubkeyPkcs1Str,
-    CRYPT_RSA_PUBLIC_FORMAT_PKCS1) === false) {
+    CRYPT_RSA_PUBLIC_FORMAT_PKCS1) === False) {
     $extErrMsg[] = 'Public key is not a RSA key (phpseclib error)';
-    return false;
+    return False;
   }
 
   // Trick to avoid double-parsing: Crypto_RSA thinks the loaded key is private,
@@ -184,42 +198,14 @@ function authSetPubKey(&$pemCert, $userName, $tokenValiditySecs, $sshKeyDir,
     }
     fclose($pipes[2]);
 
-    if (proc_close($ph) == 0) return true;
+    if (proc_close($ph) == 0) return True;
   }
 
   // Error condition
-  return false;
+  return False;
 }
 
-/** Get AliEn username from LDAP. See documentation here[1].
- *
- *  [1] http://php.net/manual/en/function.ldap-search.php
- */
-/*function authGetUser(&$userName, &$maxValiditySecs) {
-
-  $userName = 'testuser';
-  $maxValiditySecs = 3600;
-  return true;
-
-  $lh = ldap_connect("aliendb06a.cern.ch", 8389);
-  if (!$lh) return null;
-
-  $lr = @ldap_search($lh, "ou=People,o=alice,dc=cern,dc=ch",
-    "subject=" . $_SERVER["SSL_CLIENT_S_DN"], array("uid"));
-  if (!$lr) return null;
-
-  $li = ldap_get_entries($lh, $lr);
-  if ($li["count"] != 1) return null;
-
-  if (isset($li[0]["uid"])) {
-    $user = $li[0]["uid"][0];
-    return $user;
-  }
-
-  return null;
-}*/
-
-/** Entry point.
+/** Entry point: no output should be produced before here
  */
 
 // Choose output type (default: HTML)
@@ -232,11 +218,14 @@ if (isset($_GET['o'])) {
 }
 else $outputType = AUTH_OUT_HTML;
 
-if (authCheckReqs($errMsg) === true) {
+// Get server name from the certificate, and set client subject
+$serverFqdn = $_SERVER['SSL_SERVER_S_DN_CN'];
+$clientSubject = $_SERVER['SSL_CLIENT_S_DN'];
 
-  // Get server name from the certificate, and set client subject
-  $serverFqdn = $_SERVER['SSL_SERVER_S_DN_CN'];
-  $clientSubject = $_SERVER['SSL_CLIENT_S_DN'];
+if ($confOk === False) {
+  $errMsg[] = 'Please write your configuration in conf.php first!';
+}
+else if (authCheckReqs($errMsg) === True) {
 
   if (!authGetUser($clientSubject, $userName, $validitySecs, $errMsg)) {
     $errMsg[] = "Can't get user from $pluginUser plugin";
@@ -246,7 +235,7 @@ if (authCheckReqs($errMsg) === true) {
     // Argument is the PEM certificate (containing a RSA pubkey)
     if (authSetPubKey($_SERVER['SSL_CLIENT_CERT'], $userName, $validitySecs,
           $sshKeyDir, $validUntilStr, $errMsg)) {
-      $authValid = true;
+      $authValid = True;
     }
 
   }
