@@ -242,8 +242,11 @@ else if (authCheckReqs($errMsg) === True) {
 
 }
 
-?>
-<?php if ($outputType == AUTH_OUT_XML) :
+//
+// Output in XML
+//
+
+if ($outputType == AUTH_OUT_XML) :
 
 $outXml = new SimpleXMLElement('<sshauth></sshauth>');
 $outXml->addAttribute('version', $authVer);
@@ -271,23 +274,29 @@ $authXml->addChild('valid', ($authValid ? 'true' : 'false'));
 // Output XML
 header('Content-type: text/xml');
 echo $outXml->asXML();
-?>
-<? elseif ($outputType == AUTH_OUT_TXT) : ?>
-<?php
+
+//
+// Output in Plain Text
+//
+
+elseif ($outputType == AUTH_OUT_TXT) :
 
 // Text-only output is very minimal
 header('Content-type: text/plain');
-echo "$userName@$serverFqdn:$sshPort"
+echo "$userName@$serverFqdn:$sshPort";
 
-?>
-<? elseif ($outputType == AUTH_OUT_HTML) : ?>
+//
+// Output in HTML
+//
+
+elseif ($outputType == AUTH_OUT_HTML) : ?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
   "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en" dir="ltr">
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<title>Authentication to <?= $serverFqdn ?></title>
+<title>Authentication to <?php echo $serverFqdn ?></title>
 
 <style type="text/css">
 
@@ -331,7 +340,7 @@ body {
 <body>
 
 <?php if (isset($serverFqdn) && isset($clientSubject)) : ?>
-<h1>Authentication to <?= $serverFqdn ?></h1>
+<h1>Authentication to <?php echo $serverFqdn ?></h1>
 
 <p>You have been identified as:
   <span class="imp"><?php echo $clientSubject ?></span></p>
@@ -349,14 +358,14 @@ foreach ($errMsg as $e) echo "<li>$e</li>\n"; ?></ul></div>
 <ul>
   <li>Your username: <span class="imp"><?php echo $userName ?></span></li>
   <li>Your authentication will remain valid until:
-    <span class="imp"><?= $validUntilStr ?></span></li>
+    <span class="imp"><?php echo $validUntilStr ?></span></li>
 </ul>
 
-<p>You can now login to <?= $serverFqdn ?> with your private key with the
+<p>You can now login to <?php echo $serverFqdn ?> with your private key with the
 following command:</p>
 
-<p><span class="cod">ssh -p <?= $sshPort ?> -i ~/.globus/userkey.pem
-  <?= $userName ?>@<?= $serverFqdn ?></span></p>
+<p><span class="cod">ssh -p <?php echo $sshPort ?> -i ~/.globus/userkey.pem
+  <?php echo $userName ?>@<?php echo $serverFqdn ?></span></p>
 
 <p>No password will be asked.</p>
 
