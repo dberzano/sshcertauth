@@ -284,8 +284,13 @@ else if (authCheckReqs($errMsg) === true) {
     if ($pubkeySsh === false) {
       $errMsg[] = "Cannot extract pubkey in SSH format from PEM certificate\n";
     }
-    else if (!authAllowPubkey($pubkeySsh, $userName, $sshKeyDir, $extErrMsg)) {
-      $errMsg[] = "Cannot allow public key\n";
+    else {
+      if (authAllowPubkey($pubkeySsh, $userName, $sshKeyDir, $extErrMsg)) {
+        $authValid = true;
+      }
+      else {
+        $errMsg[] = "Cannot allow public key\n";
+      }
     }
 
   }
@@ -382,6 +387,16 @@ body {
   margin-left: 20px;
 }
 
+.ver, .ver a {
+  color: #c0c0c0;
+  text-decoration: none;
+}
+
+.ver {
+  font-size: 80%;
+  font-style: italic;
+}
+
 </style>
 
 </head>
@@ -417,6 +432,8 @@ following command:</p>
   <?php echo $userName ?>@<?php echo $serverFqdn ?></span></p>
 
 <p>No password will be asked.</p>
+
+<p class="ver"><a href="https://github.com/dberzano/sshcertauth">sshcertauth v<?php echo $authVer ?></a></p>
 
 <?php endif ?>
 
