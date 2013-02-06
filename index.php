@@ -18,47 +18,37 @@
  *  Key extraction is performed by OpenSSL, so it must be enabled at build time
  *  in your PHP version -- you can check it with phpinfo().
  *
- *  Key conversion is performed by a builtin phpseclib, distributed along with
- *  this code: phpseclib is covered by MIT license, see [1] for more
- *  information.
- *
- *  TODO: XML/JSON/RPC output (choose one...)
- *
- *  REQ: php5.2 (php53), php53-ldap, short_tags on
- *
- *  [1] http://phpseclib.sourceforge.net/
  */
 
-/** Redirect every request to this script
- */
+//
+// Redirect every request to this script
+//
 
 $RedirTo = dirname($_SERVER['SCRIPT_NAME']) . '/';
 if ($_SERVER['QUERY_STRING'] != '') {
   $RedirTo .= '?' . $_SERVER['QUERY_STRING'];
 }
-
 if ($_SERVER['REQUEST_URI'] != $RedirTo) {
-  header("Location: $RedirTo", True, 302);
+  header("Location: $RedirTo", true, 302);
   die();
 }
 
-/** Includes, definitions, global variables...
- */
+//
+// Includes, definitions, global variables...
+//
 
-$confOk = False;
+// Defines for output types
+define('AUTH_OUT_XML',  0);
+define('AUTH_OUT_HTML', 1);
+define('AUTH_OUT_TXT',  2);
 
-// Include phpseclib and configuration
-set_include_path( get_include_path() . PATH_SEPARATOR . 
-  dirname($_SERVER['SCRIPT_FILENAME']) . '/phpseclib0.2.2' );
-require_once 'Crypt/RSA.php';
-
+// Parse configuration
+$confOk = false;
 if (file_exists('conf.php')) {
   require_once 'conf.php';
-
   // Include module to retrieve user from client certificate's subject
   require_once 'plugins/user/' . $pluginUser . '.php';
-
-  $confOk = True;
+  $confOk = true;
 }
 else {
   // Define a dummy function to prevent a fatal error
@@ -68,14 +58,6 @@ else {
   $pluginUser = '';
 }
 
-// When exporting to SSH key, do not append any text comment at the end
-define('CRYPT_RSA_COMMENT', '');
-
-// Defines for output types
-define('AUTH_OUT_XML',  0);
-define('AUTH_OUT_HTML', 1);
-define('AUTH_OUT_TXT',  2);
-
 // Date and time default format: e.g., 'Dec 11 2011 15:27:35 +0000' -- note that
 // timezone is extremely important!
 define('AUTH_DATETIME_FORMAT', 'M d Y H:i:s O');
@@ -84,20 +66,25 @@ define('AUTH_DATETIME_FORMAT', 'M d Y H:i:s O');
 $serverFqdn = $_SERVER['SERVER_NAME'];
 
 // When auth succeeds, $authValid becomes true
-$authValid = False;
+$authValid = false;
 
 // Version
-$authVer = '0.2';
+$authVer = '0.8';
 
 // Error messages are an array, empty at start
 $errMsg = array();
 
-/** Checks for required components, for now: OpenSSL in PHP >= 5.2 and LDAP.
- *  Returns true on success, false on failure. The only argument is an array of
- *  strings representing errors, passed by reference: each error is appended to
- *  that string.
- */
+//
+// Functions
+//
+
+//______________________________________________________________________________
 function authCheckReqs(&$reqErrMsg) {
+
+  // Checks for required components, for now: OpenSSL in PHP >= 5.2 and LDAP.
+  // Returns true on success, false on failure. The only argument is an array of
+  // strings representing errors, passed by reference: each error is appended to
+  // that string.
 
   $nErrMsg = count($reqErrMsg);
 
@@ -111,71 +98,30 @@ function authCheckReqs(&$reqErrMsg) {
       "(SSLOptions +StdEnvVars +ExportCertData in apache2) must be enabled\n";
   }
 
-  if (!function_exists('openssl_pkey_get_details')) {
-    $reqErrMsg[] = "At least PHP 5.2 with OpenSSL enabled is required\n";
+  if (!function_exists('openssl_pkey_get_public')) {
+    $reqErrMsg[] = "PHP with OpenSSL support is required\n";
   }
 
   if (!function_exists('ldap_connect')) {
-    $reqErrMsg[] = "LDAP support for PHP must be enabled\n";
+    $reqErrMsg[] = "PHP with LDAP support is required\n";
   }
 
   if (!class_exists('SimpleXMLElement')) {
-    $reqErrMsg[] = "SimpleXML for PHP must be enabled\n";
+    $reqErrMsg[] = "PHP with SimpleXML support is required\n";
   }
 
-  if (count($reqErrMsg) > $nErrMsg) return False;
-  return true;
+  return !(count($reqErrMsg) > $nErrMsg);
 }
 
-/**
- */
-function authSetPubKey(&$pemCert, $userName, $tokenValiditySecs, $sshKeyDir,
-  &$validUntilStr, &$extErrMsg) {
+//______________________________________________________________________________
+function authAllowPubkey(&$pubkeySsh, $userName, $sshKeyDir, &$extErrMsg) {
 
-  // Checks if the key is in the correct format (only RSA supported)
-  $pubkeyRes = openssl_pkey_get_public($pemCert);
+  // Places the given public key in SSH format in the authorized keys file using
+  // proper external commands. In order for the external scripts to work, the
+  // sudoers file should be configured properly as described on the manual.
+  // Returns true on success, false on failure. In case of failure, error
+  // messages are appended to the given array of error messages
 
-  if ($pubkeyRes === False) {
-    $extErrMsg[] = 'Can\'t extract pubkey from the certificate';
-    return False;
-  }
-
-  $pubkeyDetails = openssl_pkey_get_details($pubkeyRes);
-
-  if ($pubkeyDetails['type'] != OPENSSL_KEYTYPE_RSA) {
-    $extErrMsg[] = 'Public key is not a RSA key';
-    return False;
-  }
-
-  // The sole public key
-  $pubkeyPkcs1Str = $pubkeyDetails['key'];
-
-  // Load the public key: Crypt_RSA does not make any difference between public
-  // and private
-  $rsa = new Crypt_RSA();
-
-  if ($rsa->loadKey($pubkeyPkcs1Str,
-    CRYPT_RSA_PUBLIC_FORMAT_PKCS1) === False) {
-    $extErrMsg[] = 'Public key is not a RSA key (phpseclib error)';
-    return False;
-  }
-
-  // Trick to avoid double-parsing: Crypto_RSA thinks the loaded key is private,
-  // so instead of invoking $rsa->setPublicKey(), we just make the
-  // publicExponent equal to the current one
-  $rsa->publicExponent = $rsa->exponent;
-
-  // Convert the key to SSH
-  $pubkeySshStr = $rsa->getPublicKey(CRYPT_RSA_PUBLIC_FORMAT_OPENSSH);
-
-  // Set expiration date: output is a string, timezone is UTC
-  $validUntilTs = time() + $tokenValiditySecs;
-  $validUntilStr = date(AUTH_DATETIME_FORMAT, $validUntilTs);
-
-  // Expiration date, formatted, is appended as a comment to the key
-  $pubkeySshStr .= ' Valid until: ' . $validUntilStr;
-
-  // Key is sent 
   $ph = @proc_open(
     dirname($_SERVER['SCRIPT_FILENAME']) .
       "/keys_keeper.sh addkey --user '$userName' --keydir '$sshKeyDir'",
@@ -184,36 +130,130 @@ function authSetPubKey(&$pemCert, $userName, $tokenValiditySecs, $sshKeyDir,
       1 => array('pipe', 'w'),
       2 => array('pipe', 'w')
     ),
-    $pipes);
+    $pipes
+  );
 
   if ($ph) {
 
-    // The script expects the key on stdin
-    fwrite($pipes[0], $pubkeySshStr);
+    // Script expects the key on stdin
+    fwrite($pipes[0], $pubkeySsh);
     fclose($pipes[0]);
 
     // Errors from stderr
-    while ($e = fread($pipes[2], 300)) {
-      $extErrMsg[] = "Key stager: $e";
-    }
+    $stderrStr = stream_get_contents($pipes[2]);
     fclose($pipes[2]);
+    if ($stderrStr != '') {
+      $extErrMsg[] = "Key stager: " . $stderrStr;
+    }
 
-    if (proc_close($ph) == 0) return True;
+    if (proc_close($ph) == 0) return true;
   }
 
-  // Error condition
-  return False;
+  return false;  // error
 }
 
-/** Entry point: no output should be produced before here
- */
+//______________________________________________________________________________
+function authX509PemCertToSshRsaPubKey($in_cert, $pubkey_comment, &$extErrMsg) {
 
-// Choose output type (default: HTML)
+  // Given a X.509 certificate in PEM format, it extracts the public key and
+  // returns it as a one-line armored string converted to the SSH public key
+  // format, as described in rfc4253. Returns false if an error occurs. OpenSSL
+  // executables must be present in path [TODO]
+
+  $ph = @proc_open(
+    "LANG=C openssl x509 -noout -pubkey | openssl rsa -pubin -noout -text",
+    array(
+      0 => array('pipe', 'r'),
+      1 => array('pipe', 'w'),
+      2 => array('pipe', 'w')
+    ),
+    $pipes
+  );
+
+  if (!is_resource($ph)) {
+    $extErrMsg[] = "Cannot open I/O streams to/from openssl.\n";
+    return false;
+  }
+
+  // Silence stderr
+  fclose($pipes[2]);
+
+  // Send PEM certificate to the stream
+  fwrite($pipes[0], $in_cert);
+  fclose($pipes[0]);
+
+  // Hexadecimal strings of exponent and modulus
+  $n_str = '';
+  $e_str = '';
+
+  // Parse openssl output and get exponent and modulus
+  $parse_n = false;
+  while ($buf = fgets($pipes[1])) {
+    if ($parse_n) {
+      if (strstr($buf, 'Exponent')) {
+        $m = array();
+        preg_match("/\(0x([0-9A-Za-z]+)\)/", $buf, $m);
+        $e_str = $m[1];
+        if (strlen($e_str) % 2) $e_str = '0' . $e_str;
+      }
+      else {
+        $n_str .= $buf;
+      }
+    }
+    else if (strstr($buf, 'Modulus')) {
+      $parse_n = true;
+    }
+  }
+
+  fclose($pipes[1]);
+  $rv = proc_get_status($ph);
+  $rv = $rv['exitcode'];
+  proc_close($ph);
+
+  // Removes all garbage from modulus string (line returns, colons,...)
+  $n_str = preg_replace("/[^0-9A-Za-z]/", "", $n_str);
+
+  if (($rv != 0) || ($e_str == '') || ($n_str == '')) {
+    print "There is a problem converting the certificate\n";
+    return false;
+  }
+
+  // Final format will be [rfc4253]:
+  //   string 'ssh-rsa'
+  //   mpint e
+  //   mpint n
+  // Fields are prefixed with a 4-byte big-endian length. mpint are in
+  // big-endian format as well.
+
+  $raw_outkey =
+    pack('N', 7)                . 'ssh-rsa' .
+    pack('N', strlen($e_str)/2) . pack('H*', $e_str) .
+    pack('N', strlen($n_str)/2) . pack('H*', $n_str);
+
+  // Returns full SSH key, with comment appended
+  if ($pubkey_comment != '') {
+    $pubkey_comment = ' ' . $pubkey_comment;
+  }
+
+  return 'ssh-rsa ' . base64_encode($raw_outkey) . $pubkey_comment;
+}
+
+//
+// Entry point: no output should be produced before this point
+//
+
+// Choose output type (defaults to HTML)
 if (isset($_GET['o'])) {
   switch ($_GET['o']) {
-    case 'xml': $outputType = AUTH_OUT_XML; break;
-    case 'txt': $outputType = AUTH_OUT_TXT; break;
-    default: case 'html': $outputType = AUTH_OUT_HTML; break;
+    case 'xml':
+      $outputType = AUTH_OUT_XML;
+    break;
+    case 'txt':
+      $outputType = AUTH_OUT_TXT;
+    break;
+    default: case 'html':
+      $outputType = AUTH_OUT_HTML;
+    break;
   }
 }
 else $outputType = AUTH_OUT_HTML;
@@ -222,24 +262,33 @@ else $outputType = AUTH_OUT_HTML;
 $serverFqdn = $_SERVER['SSL_SERVER_S_DN_CN'];
 $clientSubject = $_SERVER['SSL_CLIENT_S_DN'];
 
-if ($confOk === False) {
+if ($confOk === false) {
   $errMsg[] = 'Please write your configuration in conf.php first!';
 }
-else if (authCheckReqs($errMsg) === True) {
-
+else if (authCheckReqs($errMsg) === true) {
   if (!authGetUser($clientSubject, $userName, $validitySecs, $errMsg)) {
     $errMsg[] = "Can't get user from $pluginUser plugin";
   }
   else {
 
-    // Argument is the PEM certificate (containing a RSA pubkey)
-    if (authSetPubKey($_SERVER['SSL_CLIENT_CERT'], $userName, $validitySecs,
-          $sshKeyDir, $validUntilStr, $errMsg)) {
-      $authValid = True;
+    // Set expiration date: output is a string, timezone is UTC
+    $validUntilTs = time() + $tokenValiditySecs;
+    $validUntilStr = date(AUTH_DATETIME_FORMAT, $validUntilTs);
+
+    // Expiration date, formatted, is appended as a comment to the key
+    $pubkeySshComment = "Valid until: $validUntilStr";
+
+    $pubkeySsh = authX509PemCertToSshRsaPubKey($_SERVER['SSL_CLIENT_CERT'],
+      $pubkeySshComment, $errMsg);
+
+    if ($pubkeySsh === false) {
+      $errMsg[] = "Cannot extract pubkey in SSH format from PEM certificate\n";
+    }
+    else if (!authAllowPubkey($pubkeySsh, $userName, $sshKeyDir, $extErrMsg)) {
+      $errMsg[] = "Cannot allow public key\n";
     }
 
   }
-
 }
 
 //
@@ -248,7 +297,7 @@ else if (authCheckReqs($errMsg) === True) {
 
 if ($outputType == AUTH_OUT_XML) :
 
-$outXml = new SimpleXMLElement('<sshauth></sshauth>');
+$outXml = new SimpleXMLElement('<sshcertauth></sshcertauth>');
 $outXml->addAttribute('version', $authVer);
 
 // Error messages, if any
