@@ -205,8 +205,11 @@ function Expiry() {
 
     CountKeys=0  # valid keys
 
-    while read Key; do
+    local KeyFileReadDone=0
+    while [ $KeyFileReadDone == 0 ] ; do
 
+      # Works also if no newline before EOF
+      read Key || KeyFileReadDone=1
       let CountScannedKeys++  # report
 
       # Is the "Valid until:" comment present inside the key? ExpDateIdx is set
@@ -257,8 +260,10 @@ function Expiry() {
       prn "$KeyFile: no valid keys, file removed"
       let CountDeletedFiles++
     else
-      # Substitute file with temporary file containing only valid keys
-      rm -f $KeyFile && mv $TmpKeyFile $KeyFile
+      # Substitute file with temporary file containing only valid keys.
+      # Symbolic links are preserved: original file is modified
+      cat $TmpKeyFile > $KeyFile
+      rm -f $TmpKeyFile
     fi
 
     Unlock $KeyFile

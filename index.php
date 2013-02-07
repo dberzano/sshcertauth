@@ -70,7 +70,7 @@ $serverFqdn = $_SERVER['SERVER_NAME'];
 $authValid = false;
 
 // Version
-$authVer = '0.8.2';
+$authVer = '0.8.3';
 
 // Error messages are an array, empty at start
 $errMsg = array();
