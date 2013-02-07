@@ -13,12 +13,16 @@ $sshPort = 22;
 // Authorized keys directory
 $sshKeyDir = '/tmp/authorized_keys_test';
 
-// Maximum token validity, in seconds
+// Maximum token validity, in seconds. The authentication plugin returns a
+// token validity, which is capped to this maximum value
 $maxValiditySecs = 3600;
 
 // Plugin to retrieve the username based on the certificate subject: it is a PHP
 // source file included from plugins/user directory -- specify it without the
 // .php extension
 $pluginUser = 'alice_ldap';
+
+// Path to the openssl binary
+$opensslBin = 'openssl';
 
 ?>

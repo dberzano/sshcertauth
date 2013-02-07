@@ -47,7 +47,7 @@ $confOk = false;
 if (file_exists('conf.php')) {
   require_once 'conf.php';
   // Include module to retrieve user from client certificate's subject
-  require_once 'plugins/user/' . $pluginUser . '.php';
+  require_once "plugins/user/${pluginUser}.php";
   $confOk = true;
 }
 else {
@@ -56,6 +56,7 @@ else {
   $userName = '';
   $validitySecs = 0;
   $pluginUser = '';
+  $opensslBin = 'openssl';
 }
 
 // Date and time default format: e.g., 'Dec 11 2011 15:27:35 +0000' -- note that
@@ -69,7 +70,7 @@ $serverFqdn = $_SERVER['SERVER_NAME'];
 $authValid = false;
 
 // Version
-$authVer = '0.8.0';
+$authVer = '0.8.2';
 
 // Error messages are an array, empty at start
 $errMsg = array();
@@ -89,25 +90,25 @@ function authCheckReqs(&$reqErrMsg) {
   $nErrMsg = count($reqErrMsg);
 
   if (!isset($_SERVER['HTTPS']) || ($_SERVER['HTTPS'] != 'on')) {
-    $reqErrMsg[] = "HTTPS mode is required\n";
+    $reqErrMsg[] = 'HTTPS mode is required';
   }
 
   if ((!isset($_SERVER['SSL_CLIENT_S_DN'])) ||
       (!isset($_SERVER['SSL_CLIENT_CERT']))) {
-    $reqErrMsg[] = "Extended SSL variables " .
-      "(SSLOptions +StdEnvVars +ExportCertData in apache2) must be enabled\n";
+    $reqErrMsg[] = 'Extended SSL variables ' .
+      '(SSLOptions +StdEnvVars +ExportCertData in apache2) must be enabled';
   }
 
   if (!function_exists('openssl_pkey_get_public')) {
-    $reqErrMsg[] = "PHP with OpenSSL support is required\n";
+    $reqErrMsg[] = 'PHP with OpenSSL support is required';
   }
 
   if (!function_exists('ldap_connect')) {
-    $reqErrMsg[] = "PHP with LDAP support is required\n";
+    $reqErrMsg[] = 'PHP with LDAP support is required';
   }
 
   if (!class_exists('SimpleXMLElement')) {
-    $reqErrMsg[] = "PHP with SimpleXML support is required\n";
+    $reqErrMsg[] = 'PHP with SimpleXML support is required';
   }
 
   return !(count($reqErrMsg) > $nErrMsg);
@@ -143,7 +144,7 @@ function authAllowPubkey(&$pubkeySsh, $userName, $sshKeyDir, &$extErrMsg) {
     $stderrStr = stream_get_contents($pipes[2]);
     fclose($pipes[2]);
     if ($stderrStr != '') {
-      $extErrMsg[] = "Key stager: " . $stderrStr;
+      $extErrMsg[] = "Key stager: $stderrStr";
     }
 
     if (proc_close($ph) == 0) return true;
@@ -153,15 +154,17 @@ function authAllowPubkey(&$pubkeySsh, $userName, $sshKeyDir, &$extErrMsg) {
 }
 
 //______________________________________________________________________________
-function authX509PemCertToSshRsaPubKey($in_cert, $pubkey_comment, &$extErrMsg) {
+function authX509PemCertToSshRsaPubKey($in_cert, $pubkey_comment, $opensslBin,
+  &$extErrMsg) {
 
   // Given a X.509 certificate in PEM format, it extracts the public key and
   // returns it as a one-line armored string converted to the SSH public key
   // format, as described in rfc4253. Returns false if an error occurs. OpenSSL
-  // executables must be present in path [TODO]
+  // executable is used: path can be configured in conf.php
 
   $ph = @proc_open(
-    "LANG=C openssl x509 -noout -pubkey | openssl rsa -pubin -noout -text",
+    "LANG=C '$opensslBin' x509 -noout -pubkey | " .
+    "'$opensslBin' rsa -pubin -noout -text",
     array(
       0 => array('pipe', 'r'),
       1 => array('pipe', 'w'),
@@ -171,7 +174,7 @@ function authX509PemCertToSshRsaPubKey($in_cert, $pubkey_comment, &$extErrMsg) {
   );
 
   if (!is_resource($ph)) {
-    $extErrMsg[] = "Cannot open I/O streams to/from openssl.\n";
+    $extErrMsg[] = 'Cannot open I/O streams to/from openssl';
     return false;
   }
 
@@ -214,7 +217,7 @@ function authX509PemCertToSshRsaPubKey($in_cert, $pubkey_comment, &$extErrMsg) {
   $n_str = preg_replace("/[^0-9A-Za-z]/", "", $n_str);
 
   if (($rv != 0) || ($e_str == '') || ($n_str == '')) {
-    print "There is a problem converting the certificate\n";
+    $extErrMsg[] = 'There was a problem parsing the public key';
     return false;
   }
 
@@ -272,24 +275,27 @@ else if (authCheckReqs($errMsg) === true) {
   else {
 
     // Set expiration date: output is a string, timezone is UTC
-    $validUntilTs = time() + $tokenValiditySecs;
+    if ($validitySecs > $maxValiditySecs) {
+      $validitySecs = $maxValiditySecs;  // cap validity
+    }
+    $validUntilTs = time() + $validitySecs;
     $validUntilStr = date(AUTH_DATETIME_FORMAT, $validUntilTs);
 
     // Expiration date, formatted, is appended as a comment to the key
     $pubkeySshComment = "Valid until: $validUntilStr";
 
     $pubkeySsh = authX509PemCertToSshRsaPubKey($_SERVER['SSL_CLIENT_CERT'],
-      $pubkeySshComment, $errMsg);
+      $pubkeySshComment, $opensslBin, $errMsg);
 
     if ($pubkeySsh === false) {
-      $errMsg[] = "Cannot extract pubkey in SSH format from PEM certificate\n";
+      $errMsg[] = "Cannot extract pubkey in SSH format from PEM certificate";
     }
     else {
       if (authAllowPubkey($pubkeySsh, $userName, $sshKeyDir, $extErrMsg)) {
         $authValid = true;
       }
       else {
-        $errMsg[] = "Cannot allow public key\n";
+        $errMsg[] = 'Cannot allow public key';
       }
     }
 
@@ -390,6 +396,10 @@ body {
 .ver, .ver a {
   color: #c0c0c0;
   text-decoration: none;
+}
+
+.ver a:hover {
+  text-decoration: underline;
 }
 
 .ver {
