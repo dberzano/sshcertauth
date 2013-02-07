@@ -210,6 +210,7 @@ function Expiry() {
 
       # Works also if no newline before EOF
       read Key || KeyFileReadDone=1
+      [ "$Key" == '' ] && continue
       let CountScannedKeys++  # report
 
       # Is the "Valid until:" comment present inside the key? ExpDateIdx is set
