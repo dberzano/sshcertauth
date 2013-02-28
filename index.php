@@ -70,7 +70,7 @@ $serverFqdn = $_SERVER['SERVER_NAME'];
 $authValid = false;
 
 // Version
-$authVer = '0.8.4';
+$authVer = '0.8.5';
 
 // Error messages are an array, empty at start
 $errMsg = array();
@@ -209,9 +209,7 @@ function authX509PemCertToSshRsaPubKey($in_cert, $pubkey_comment, $opensslBin,
   }
 
   fclose($pipes[1]);
-  $rv = proc_get_status($ph);
-  $rv = $rv['exitcode'];
-  proc_close($ph);
+  $rv = proc_close($ph);
 
   // Removes all garbage from modulus string (line returns, colons,...)
   $n_str = preg_replace("/[^0-9A-Za-z]/", "", $n_str);
