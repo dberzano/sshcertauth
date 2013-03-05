@@ -70,7 +70,7 @@ $serverFqdn = $_SERVER['SERVER_NAME'];
 $authValid = false;
 
 // Version
-$authVer = '0.8.5';
+$authVer = '0.8.6';
 
 // Error messages are an array, empty at start
 $errMsg = array();
@@ -273,7 +273,7 @@ else if (authCheckReqs($errMsg) === true) {
   else {
 
     // Set expiration date: output is a string, timezone is UTC
-    if ($validitySecs > $maxValiditySecs) {
+    if (($validitySecs > $maxValiditySecs) || ($validitySecs <= 0)) {
       $validitySecs = $maxValiditySecs;  // cap validity
     }
     $validUntilTs = time() + $validitySecs;
