@@ -356,26 +356,46 @@ elseif ($outputType == AUTH_OUT_HTML) : ?>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <title>Authentication to <?php echo $serverFqdn ?></title>
 
+<link href='https://fonts.googleapis.com/css?family=Open+Sans:400,600'
+rel='stylesheet' type='text/css'/>
 <style type="text/css">
 
 body {
-  font-family: Arial, helvetica, sans-serif;
+  font-family: Open Sans, Arial, helvetica, sans-serif;
+  font-weight: 400;
   font-size: 11pt;
   color: black;
   background-color: white;
 }
 
+b, strong {
+  font-weight: 600;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: Open Sans, Arial, helvetica, sans-serif;
+  font-weight: 400;
+  color: #0489B7;
+}
+
+p {
+  margin-top: 20px;
+  margin-bottom:20px;
+}
+
 .imp {
   font-weight: bold;
-  color: #565678;
+  color: #0489B7;
 }
 
 .err {
-  color: red;
+  -moz-box-shadow: inset 0 0 9px red;
+  -webkit-box-shadow: inset 0 0 9px red;
+  box-shadow: inner 0 0 9px red;
   background-color: #ffdddd;
-  padding: 5px;
-  border: 2px dashed red;
-  font-weight: bold;
+  padding: 10px;
+  border-radius: 10px;
+  color: red;
 }
 
 .err ul {
@@ -383,11 +403,14 @@ body {
 }
 
 .cod {
-  color: #121212;
-  background-color: #dadada;
-  padding: 5px;
-  border: 1px dashed #121212;
-  font-family: Monaco, Courier New, Lucida Console, monospace;
+  -moz-box-shadow: inset 0 0 9px #204a87;
+  -webkit-box-shadow: inset 0 0 9px #204a87;
+  box-shadow: inner 0 0 9px #204a87;
+  background-color: rgb(228,240,245);
+  padding: 10px;
+  border-radius: 10px;
+  color: #204a87;
+  font-family: monospace;
   margin-left: 20px;
 }
 
@@ -414,8 +437,10 @@ body {
 <?php if (isset($serverFqdn) && isset($clientSubject)) : ?>
 <h1>Authentication to <?php echo $serverFqdn ?></h1>
 
-<p>You have been identified as:
-  <span class="imp"><?php echo $clientSubject ?></span></p>
+<p>You have been identified as:</p>
+
+<p><span class="cod"><?php echo $clientSubject ?></span></p>
+
 <?php endif ?>
 
 <?php if (count($errMsg) > 0) : ?>
@@ -433,15 +458,29 @@ foreach ($errMsg as $e) echo "<li>$e</li>\n"; ?></ul></div>
     <span class="imp"><?php echo $validUntilStr ?></span></li>
 </ul>
 
-<p>You can now login to <?php echo $serverFqdn ?> with your private key with the
-following command:</p>
+<p>You can now login to <span class="imp"><?php echo $serverFqdn ?></span> with
+your private key using the following command:</p>
 
-<p><span class="cod">ssh -p <?php echo $sshPort ?> -i ~/.globus/userkey.pem
-  <?php echo $userName ?>@<?php echo $serverFqdn ?></span></p>
+<p><span class="cod"><?php
+
+// Prints a suggested command to access the server: it can be customized
+
+if (!isset($suggestedCmd)) {
+  $suggestedCmd = 'ssh -p <PORT> -i ~/.globus/userkey.pem <USER>@<HOST>';
+}
+
+$suggestedCmd = str_replace('<PORT>', $port, $suggestedCmd);
+$suggestedCmd = str_replace('<USER>', $userName, $suggestedCmd);
+$suggestedCmd = str_replace('<HOST>', $serverFqdn, $suggestedCmd);
+
+print htmlspecialchars($suggestedCmd);
+
+?></span></p>
 
 <p>No password will be asked.</p>
 
-<p class="ver"><a href="https://github.com/dberzano/sshcertauth">sshcertauth v<?php echo $authVer ?></a></p>
+<p class="ver"><a href="https://github.com/dberzano/sshcertauth">sshcertauth
+v<?php echo $authVer ?></a></p>
 
 <?php endif ?>
 

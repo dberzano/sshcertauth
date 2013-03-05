@@ -25,4 +25,25 @@ $pluginUser = 'alice_ldap';
 // Path to the openssl binary
 $opensslBin = 'openssl';
 
+// Suggested command to print in HTML version. <PORT>, <USER> and <HOST> will be
+// substituted
+//$suggestedCmd = 'ssh -p <PORT> -i ~/.globus/userkey.pem <USER>@<HOST>';
+
+//
+// Configuration for the pool_users plugin
+//
+
+// Path to the mapfile that maps subjects with local accounts
+$mapFile = '/tmp/x509-mapfile';
+
+// Validity of the mapping
+$mapValiditySecs = 172800;  // 2 days
+
+// Pool accounts: lower boundary, upper boundary and username format string. The
+// format string is printf-compatible and must include only one %u substituted
+// with the pool ID
+$mapIdLow = 100;
+$mapIdHi  = 110;
+$mapUserFormat = 'pool%03u';
+
 ?>
