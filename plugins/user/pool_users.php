@@ -90,7 +90,7 @@ function authGetUser($certSubject, &$userName, &$validitySecs, &$errMsg) {
   if ($idFound != -1) {
     $map['subj'] = $certSubject;
     $map['ts'] = $curtime;
-    $mappings[$id] = $map;
+    $mappings[$idFound] = $map;
   }
 
   // Writes everything back to the file
