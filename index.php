@@ -460,16 +460,12 @@ foreach ($errMsg as $e) echo "<li>$e</li>\n"; ?></ul></div>
 </ul>
 
 <p>You can now login to <span class="imp"><?php echo $serverFqdn ?></span> with
-your private key using the following command:</p>
+your private key<?php if (isset($suggestedCmd) && ($suggestedCmd != '')) : ?>
+using the following command:</p>
 
 <p><span class="cod"><?php
 
 // Prints a suggested command to access the server: it can be customized
-
-if (!isset($suggestedCmd)) {
-  $suggestedCmd = 'ssh -p <PORT> -i ~/.globus/userkey.pem <USER>@<HOST>';
-}
-
 $suggestedCmd = str_replace('<PORT>', $port, $suggestedCmd);
 $suggestedCmd = str_replace('<USER>', $userName, $suggestedCmd);
 $suggestedCmd = str_replace('<HOST>', $serverFqdn, $suggestedCmd);
@@ -477,6 +473,8 @@ $suggestedCmd = str_replace('<HOST>', $serverFqdn, $suggestedCmd);
 print htmlspecialchars($suggestedCmd);
 
 ?></span></p>
+
+<?php else : ?>.</p><?php endif ?>
 
 <p>No password will be asked.</p>
 
