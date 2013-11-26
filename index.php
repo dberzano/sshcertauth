@@ -1,23 +1,23 @@
 <?php
 
-/** index.php -- by Dario Berzano <dario.berzano@cern.ch>
+/**
+ * index.php -- by Dario Berzano <dario.berzano@cern.ch>
  *
- *  Part of sshcertauth -- https://github.com/dberzano/sshcertauth
+ * Part of sshcertauth -- https://github.com/dberzano/sshcertauth
  *
- *  From an input certificate, passed to this script by means of environment
- *  variables set by the web server, it extracts the public key and converts it
- *  to the SSH pubkey format.
+ * From an input certificate, passed to this script by means of environment
+ * variables set by the web server, it extracts the public key and converts it
+ * to the SSH pubkey format.
  *
- *  The key is subsequently added to a list of authorized keys.
+ * The key is subsequently added to a list of authorized keys.
  *
- *  The Unix username corresponding to the key is obtained by different methods
- *  (e.g., LDAP or round-robin mapping to a pool account).
+ * The Unix username corresponding to the key is obtained by different methods
+ * (e.g., LDAP or round-robin mapping to a pool account).
  *
- *  Note that only RSA keys are supported: other key formats generate an error.
+ * Note that only RSA keys are supported: other key formats generate an error.
  *
- *  Key extraction is performed by OpenSSL, so it must be enabled at build time
- *  in your PHP version -- you can check it with phpinfo().
- *
+ * Key extraction is performed by OpenSSL, so it must be enabled at build time
+ * in your PHP version -- you can check it with phpinfo().
  */
 
 //
