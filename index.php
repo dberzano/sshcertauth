@@ -412,6 +412,7 @@ p {
   color: #204a87;
   font-family: monospace;
   margin-left: 20px;
+  white-space: nowrap;
 }
 
 .ver, .ver a {
