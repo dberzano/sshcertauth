@@ -460,8 +460,7 @@ foreach ($errMsg as $e) echo "<li>$e</li>\n"; ?></ul></div>
 </ul>
 
 <p>You can now login to <span class="imp"><?php echo $serverFqdn ?></span> with
-your private key<?php if (isset($suggestedCmd) && ($suggestedCmd != '')) : ?>
-using the following command:</p>
+your private key<?php if (isset($suggestedCmd) && ($suggestedCmd != '')) : ?> using the following command:</p>
 
 <p><span class="cod"><?php
 
