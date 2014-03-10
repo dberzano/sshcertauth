@@ -44,8 +44,14 @@ define('AUTH_OUT_TXT',  2);
 
 // Parse configuration
 $confOk = false;
-if (file_exists('conf.php')) {
-  require_once 'conf.php';
+$confFiles = array('./conf.php', '/etc/sshcertauth/conf.php');
+foreach ($confFiles as $confFile) {
+  if (is_readable($confFile)) {
+    require_once $confFile;
+    $confOk = true;
+  }
+}
+if ($confOk) {
   // Include module to retrieve user from client certificate's subject
   require_once "plugins/user/${pluginUser}.php";
   $confOk = true;
@@ -264,7 +270,7 @@ $serverFqdn = $_SERVER['SSL_SERVER_S_DN_CN'];
 $clientSubject = $_SERVER['SSL_CLIENT_S_DN'];
 
 if ($confOk === false) {
-  $errMsg[] = 'Please write your configuration in conf.php first!';
+  $errMsg[] = 'Please write your configuration first!';
 }
 else if (authCheckReqs($errMsg) === true) {
   if (!authGetUser($clientSubject, $userName, $validitySecs, $errMsg)) {
