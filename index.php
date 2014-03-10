@@ -44,17 +44,23 @@ define('AUTH_OUT_TXT',  2);
 
 // Parse configuration
 $confOk = false;
-$confFiles = array('./conf.php', '/etc/sshcertauth/conf.php');
+$confFiles = array('/etc/sshcertauth/conf.php', './conf.php');
 foreach ($confFiles as $confFile) {
   if (is_readable($confFile)) {
     require_once $confFile;
     $confOk = true;
+    break;
   }
 }
 if ($confOk) {
   // Include module to retrieve user from client certificate's subject
-  require_once "plugins/user/${pluginUser}.php";
-  $confOk = true;
+  $pluginFiles = array("/usr/lib/sshcertauth/plugins/user/${pluginUser}.php", "./plugins/user/${pluginUser}.php");
+  foreach ($pluginFiles as $pluginFile) {
+    if (is_readable($pluginFile)) {
+      require_once $pluginFile;
+      break;
+    }
+  }
 }
 else {
   // Define a dummy function to prevent a fatal error
