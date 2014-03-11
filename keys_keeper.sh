@@ -147,16 +147,22 @@ function LockWait() {
 }
 
 # Reads a variable from the PHP configuration file of sshcertauth. It requires
-# php-cli to work properly. Variable content is outputted on
+# php-cli to work properly. Variable content is outputted on stdout
 function ConfPhp() {
-  local FullDir=$(dirname $0)
-  php <<EOF
+  local Dirs="/etc/sshcertauth $(dirname $0)"
+  local FullDir
+  for FullDir in $Dirs ; do
+    if [ -r "$FullDir/conf.php" ] ; then
+      php <<EOF
 <?php
 @require '$FullDir/conf.php';
 if (isset(\$$1)) { echo "\$$1\n"; exit(0); }
 exit(1);
 ?>
 EOF
+      return
+    fi
+  done
 }
 
 # Print function with a custom prefix: it also prints on /var/log/messages
